@@ -33,7 +33,7 @@ export const mockJobs: Job[] = [
     eligibility: {
       branches: ['CSE', 'IT', 'EEE', 'ECE'],
       minCGPA: 6.5,
-      maxBacklogs: 1
+      maxBacklogs: 0
     },
     package: {
       ctc: 0,
@@ -56,7 +56,7 @@ export const mockJobs: Job[] = [
     eligibility: {
       branches: ['CSE', 'IT'],
       minCGPA: 6.0,
-      maxBacklogs: 2
+      maxBacklogs: 0
     },
     package: {
       ctc: 800000
