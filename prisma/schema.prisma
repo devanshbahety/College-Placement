@@ -5,12 +5,12 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL") // e.g. file:./dev.db
+  url      = env("DATABASE_URL")
 }
 
 model Resume {
   id           String   @id @default(cuid())
-  userName     String   // <-- NEW
+  userName     String
   userEmail    String
   originalName String
   fileName     String
@@ -19,5 +19,83 @@ model Resume {
   path         String
   uploadedAt   DateTime @default(now())
 
-  @@index([userEmail])
+  educations   Education[]
+  internships  Internship[]
+  projects     Project[]
+  positions    Position[]
+  achievements Achievement[]
+  extras       ExtraActivity[]
+  skills       Skill[]
+}
+
+model Education {
+  id        String   @id @default(cuid())
+  resumeId  String
+  institute String
+  degree    String
+  start     String?
+  end       String?
+  grade     String?
+
+  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model Internship {
+  id        String   @id @default(cuid())
+  resumeId  String
+  company   String
+  title     String?
+  location  String?
+  start     String?
+  end       String?
+  bullets   Json      @default("[]") // <— changed from String[]
+
+  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  resumeId  String
+  name      String
+  summary   String?
+  bullets   Json      @default("[]") // <— changed from String[]
+
+  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model Position {
+  id        String   @id @default(cuid())
+  resumeId  String
+  role      String
+  org       String?
+  bullets   Json      @default("[]") // <— changed from String[]
+
+  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model Achievement {
+  id        String   @id @default(cuid())
+  resumeId  String
+  title     String
+  detail    String?
+
+  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model ExtraActivity {
+  id        String   @id @default(cuid())
+  resumeId  String
+  title     String
+  detail    String?
+
+  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model Skill {
+  id        String   @id @default(cuid())
+  resumeId  String
+  category  String
+  items     Json      @default("[]") // <— changed from String[]
+
+  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
 }
