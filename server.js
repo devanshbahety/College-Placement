@@ -49,14 +49,14 @@ app.get("/", (_req, res) => res.send("Placement API OK"));
 app.get("/api/ping", (_req, res) => res.json({ ok: true, ts: Date.now() }));
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// ---------- Placements (kept intact, just parameterized days) ----------
+// ---------- Placements (kept intact, parameterized days) ----------
 app.get("/api/placements", async (req, res) => {
   try {
     const days = Number(req.query.days || 30);
     const data = await fetchPlacementMails(days);
     res.json({ ok: true, count: data.length, data });
   } catch (e) {
-    console.error(e);
+    console.error("placements error:", e);
     res.status(500).json({ ok: false, error: "Failed to fetch emails" });
   }
 });
@@ -64,8 +64,8 @@ app.get("/api/placements", async (req, res) => {
 // ---------- Upload Resume ----------
 app.post("/api/resumes/upload", upload.single("resume"), async (req, res) => {
   try {
-    const userName = (req.body.userName || "").trim();  // from your form
-    const userEmail = (req.body.userEmail || "").trim(); // from your form
+    const userName = (req.body.userName || "").trim();   // from front-end
+    const userEmail = (req.body.userEmail || "").trim(); // from front-end
 
     if (!userName || !userEmail) {
       if (req.file) fs.unlink(req.file.path, () => {});
@@ -79,16 +79,17 @@ app.post("/api/resumes/upload", upload.single("resume"), async (req, res) => {
 
     const f = req.file;
 
-    // Save DB row
+    // NOTE: Ensure your Prisma schema has a `userName` field on Resume.
+    // If not, add it and run `npx prisma migrate dev`.
     const created = await prisma.resume.create({
       data: {
-        userName,                 // <-- ensure this field exists in schema
+        userName,
         userEmail,
         originalName: f.originalname,
         fileName: f.filename,
         mimeType: f.mimetype,
         size: f.size,
-        path: path.join("uploads", "resumes", f.filename), // relative, served via /uploads
+        path: path.join("uploads", "resumes", f.filename), // relative path, served at /uploads/...
       },
     });
 
@@ -112,7 +113,25 @@ app.get("/api/resumes", async (_req, res) => {
   }
 });
 
+// ---------- Global JSON error handler (must be after routes) ----------
+app.use((err, _req, res, _next) => {
+  console.error("Global error handler:", err);
+
+  // Multer known errors
+  if (err && err.name === "MulterError") {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+
+  // File type filter error or any thrown Error
+  if (err instanceof Error) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+
+  // Fallback
+  return res.status(500).json({ ok: false, error: "Unexpected server error" });
+});
+
 const PORT = process.env.PORT || 5050;
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});

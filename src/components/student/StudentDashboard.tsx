@@ -174,57 +174,52 @@ const StudentDashboard: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  const onFileChosen: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
-    setUploadMsg(null);
-    const file = e.target.files?.[0];
-    if (!file) return;
+const onFileChosen: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+  setUploadMsg(null);
+  const file = e.target.files?.[0];
+  e.target.value = ''; // reset immediately so same file can be re-picked
+  if (!file) return;
 
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      setUploadMsg('Please upload a PDF file.');
-      e.target.value = '';
+  if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+    setUploadMsg('Please upload a PDF file.');
+    return;
+  }
+
+  try {
+    const profile = readProfile();
+    const userName  = (profile.name || '').trim();
+    const userEmail = (profile.thaparEmail || profile.personalEmail || '').trim();
+
+    if (!userName || !userEmail) {
+      setUploadMsg('Please fill your Name and Email in Profile first.');
       return;
     }
 
     const form = new FormData();
-    form.append('resume', file); // field name must be "resume" for the server
-    form.append('userName', student.name);   // from profile (fallback to mock)
-    form.append('userEmail', userEmail);     // from profile or mock
+    form.append('resume', file);
+    form.append('userName', userName);
+    form.append('userEmail', userEmail);
 
-    setUploading(true);
-    try {
-      const res = await fetch('/api/resumes/upload', {
-        method: 'POST',
-        body: form,
-        // no need to set headers; browser sets multipart boundary
-        // credentials not needed unless you use cookies
-      });
+    const res = await fetch('/api/resumes/upload', {
+      method: 'POST',
+      body: form,
+    });
 
-      const json = await res.json();
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || 'Upload failed');
-      }
+    const ct = res.headers.get('content-type') || '';
+    const payload = ct.includes('application/json') ? await res.json() : { ok: false, error: await res.text() };
 
-      // Save a small client-side marker for quick feedback
-      const meta = {
-        dbId: json.data?.id,
-        name: file.name,
-        size: file.size,
-        uploadedAt: json.data?.uploadedAt || new Date().toISOString(),
-        path: json.data?.path, // e.g. uploads/resumes/<file>
-      };
-      try {
-        localStorage.setItem(RESUME_META_KEY, JSON.stringify(meta));
-      } catch {}
-
-      setUploadMsg('✅ Resume uploaded successfully.');
-    } catch (err: any) {
-      console.error(err);
-      setUploadMsg(`❌ ${err?.message || 'Upload failed'}`);
-    } finally {
-      setUploading(false);
-      e.target.value = '';
+    if (!res.ok || !payload.ok) {
+      setUploadMsg(`Upload failed: ${payload.error || res.statusText}`);
+      return;
     }
-  };
+
+    setUploadMsg('Resume uploaded successfully!');
+  } catch (err: any) {
+    console.error(err);
+    setUploadMsg('Upload failed. See console for details.');
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100">
