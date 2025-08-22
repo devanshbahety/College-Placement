@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { mockJobs, mockStudent } from '../../data/mockData';
 import { Job } from '../../types';
-import { Users, TrendingUp, Calendar, Target, DollarSign, MapPin, Link as LinkIcon } from 'lucide-react';
+import { Users, TrendingUp, Calendar, Target } from 'lucide-react';
 import JobCard from './JobCard';
 import ApplicationStatus from './ApplicationStatus';
 import ResumeManager from './ResumeManager';
@@ -19,13 +19,15 @@ const StudentDashboard: React.FC = () => {
   const [placementsError, setPlacementsError] = useState<string | null>(null);
 
   useEffect(() => {
+    const ctrl = new AbortController();
+
     (async () => {
       try {
         setLoadingPlacements(true);
         setPlacementsError(null);
 
-        // Call your working API
-        const res = await fetch('/api/placements?days=7');
+        // Last 30 days (was 7)
+        const res = await fetch('/api/placements?days=30', { signal: ctrl.signal });
         const json = await res.json();
         if (!json?.ok) throw new Error(json?.error || 'Failed to load placements');
 
@@ -36,24 +38,31 @@ const StudentDashboard: React.FC = () => {
           subject: x.subject || 'Placement Notice',
           from: x.from || '',
           company: x.company || '',
-          role: x.role || '',                    // not parsed yet; leave blank
+          role: x.role || '',
           ctc: x.ctc || '',
-          location: x.location || '',            // not parsed yet; leave blank
-          importantDates: x.importantDates || '',// not parsed yet; leave blank
-          eligibility: x.eligibility || '',      // not parsed yet; leave blank
+          location: x.location || '',
+          importantDates: x.importantDates || '',
+          eligibility: x.eligibility || '',
           link: x.link || '',
-          attachments: x.attachments || [],
+          attachments: Array.isArray(x.attachments) ? x.attachments : [],
           snippet: x.snippet || '',
         }));
 
+        // Sort newest first (defensive)
+        mapped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
         setPlacements(mapped);
       } catch (e: any) {
-        console.error('placements fetch failed:', e);
-        setPlacementsError(e?.message || 'Failed to load placements');
+        if (e?.name !== 'AbortError') {
+          console.error('placements fetch failed:', e);
+          setPlacementsError(e?.message || 'Failed to load placements');
+        }
       } finally {
         setLoadingPlacements(false);
       }
     })();
+
+    return () => ctrl.abort();
   }, []);
 
   const getTimeRemaining = (deadline: Date) => {
@@ -187,7 +196,7 @@ const StudentDashboard: React.FC = () => {
             {activeTab === 'placements' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900">Placement Notices (Last 7 days)</h2>
+                  <h2 className="text-xl font-semibold text-gray-900">Placement Notices (Last 30 days)</h2>
                   <div className="text-sm text-gray-600">
                     {loadingPlacements ? 'Loading…' : `${placements.length} found`}
                   </div>
@@ -205,71 +214,7 @@ const StudentDashboard: React.FC = () => {
 
                 <div className="grid gap-4">
                   {placements.map((p, idx) => (
-                    <div
-                      key={p.id || `${p.subject}-${idx}`}
-                      className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-lg font-semibold">
-                            {p.company || p.subject || 'Placement Notice'}
-                          </h3>
-                          {p.role && (
-                            <p className="mt-0.5 text-sm text-gray-700">
-                              Role: <span className="font-medium">{p.role}</span>
-                            </p>
-                          )}
-                          <p className="mt-0.5 text-xs text-gray-500">
-                            {new Date(p.date).toLocaleString()}
-                            {p.from && <> • From: {p.from.replace(/<.*?>/g, '').trim()}</>}
-                          </p>
-                        </div>
-                        {p.link && (
-                          <a
-                            href={p.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-sm hover:bg-gray-50"
-                          >
-                            <LinkIcon className="h-4 w-4" />
-                            Details / Apply
-                          </a>
-                        )}
-                      </div>
-
-                      <div className="mt-3 grid gap-2 text-sm text-gray-700">
-                        {p.ctc && (
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4" /> <span>{p.ctc}</span>
-                          </div>
-                        )}
-                        {p.location && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" /> <span>{p.location}</span>
-                          </div>
-                        )}
-                        {p.importantDates && (
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" /> <span>{p.importantDates}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {p.eligibility && (
-                        <p className="mt-3 text-sm text-gray-600">
-                          <span className="font-medium">Eligibility: </span>
-                          {p.eligibility}
-                        </p>
-                      )}
-
-                     {Array.isArray(p.attachments) && p.attachments.length > 0 && (
-                        <div className="mt-3">
-                          <p className="text-xs text-gray-500">
-                            Attachments: {p.attachments.map((a) => a.filename).join(', ')}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                    <PlacementCard key={p.id || `${p.subject}-${idx}`} p={p} />
                   ))}
                 </div>
               </div>
