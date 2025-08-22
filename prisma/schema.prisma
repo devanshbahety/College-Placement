@@ -1,0 +1,21 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Resume {
+  id           String   @id @default(cuid())
+  userName     String            // <— NEW
+  userEmail    String
+  originalName String
+  fileName     String
+  mimeType     String
+  size         Int
+  path         String
+  uploadedAt   DateTime @default(now())
+}

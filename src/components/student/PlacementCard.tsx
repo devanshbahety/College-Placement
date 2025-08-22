@@ -1,5 +1,5 @@
 // src/components/student/PlacementCard.tsx
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   MapPin,
@@ -25,6 +25,8 @@ export type Placement = {
   attachments?: { filename: string; contentType: string; size: number }[];
   snippet?: string;
 };
+
+const APPLIED_STORAGE_KEY = "appliedPlacements"; // { [placementKey]: true }
 
 function safeDateLabel(dateStr: string) {
   const d = new Date(dateStr);
@@ -65,6 +67,40 @@ export default function PlacementCard({ p }: { p: Placement }) {
   const showEligibility = !!p.eligibility;
   const showSnippet = !!p.snippet;
   const hasAttachments = !!p.attachments?.length;
+
+  // ---- NEW: Applied? checkbox state persisted to localStorage ----
+  const placementKey = useMemo(
+    () => (p.id && p.id.trim() ? p.id : `${p.subject}|${p.date}`),
+    [p.id, p.subject, p.date]
+  );
+  const [applied, setApplied] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(APPLIED_STORAGE_KEY);
+      if (raw) {
+        const map = JSON.parse(raw) as Record<string, boolean>;
+        if (Object.prototype.hasOwnProperty.call(map, placementKey)) {
+          setApplied(!!map[placementKey]);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [placementKey]);
+
+  function toggleApplied(next: boolean) {
+    setApplied(next);
+    try {
+      const raw = localStorage.getItem(APPLIED_STORAGE_KEY);
+      const map = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+      map[placementKey] = next;
+      localStorage.setItem(APPLIED_STORAGE_KEY, JSON.stringify(map));
+    } catch {
+      /* ignore storage errors */
+    }
+  }
+  // ----------------------------------------------------------------
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
@@ -146,26 +182,40 @@ export default function PlacementCard({ p }: { p: Placement }) {
       )}
 
       {/* Footer */}
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Mail className="h-3.5 w-3.5" aria-hidden />
           <span className="truncate">From: {cleanFrom(p.from)}</span>
         </div>
 
-        {p.link ? (
-          <a
-            className="inline-flex items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-            href={p.link}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Open application/details link in a new tab"
-          >
-            <LinkIcon className="h-4 w-4" aria-hidden />
-            <span>Apply / Details</span>
-          </a>
-        ) : (
-          <span className="text-xs text-gray-400">No link provided</span>
-        )}
+        <div className="flex items-center gap-3">
+          {/* NEW: Applied checkbox */}
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 select-none">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={applied}
+              onChange={(e) => toggleApplied(e.target.checked)}
+              aria-label="Mark this placement as applied"
+            />
+            Applied?
+          </label>
+
+          {p.link ? (
+            <a
+              className="inline-flex items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              href={p.link}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open application/details link in a new tab"
+            >
+              <LinkIcon className="h-4 w-4" aria-hidden />
+              <span>Apply / Details</span>
+            </a>
+          ) : (
+            <span className="text-xs text-gray-400">No link provided</span>
+          )}
+        </div>
       </div>
     </div>
   );

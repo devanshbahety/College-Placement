@@ -1,17 +1,102 @@
 // src/components/student/StudentDashboard.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { mockJobs, mockStudent } from '../../data/mockData';
 import { Job } from '../../types';
-import { Users, TrendingUp, Calendar, Target } from 'lucide-react';
+import { Users, TrendingUp, Calendar, Target, Upload } from 'lucide-react';
 import JobCard from './JobCard';
 import ApplicationStatus from './ApplicationStatus';
-import ResumeManager from './ResumeManager';
 import PlacementCard, { type Placement as PlacementCardType } from './PlacementCard';
+import { Link } from 'react-router-dom';
+
+type Profile = {
+  name?: string;
+  phone?: string;
+  thaparEmail?: string;
+  personalEmail?: string;
+  cgpa?: string;          // stored as string in the form
+  branch?: string;
+  tenthPercent?: string;
+  twelfthPercent?: string;
+};
+
+const PROFILE_STORAGE_KEY = 'studentProfile';
+const APPLIED_STORAGE_KEY = 'appliedPlacements';
+const RESUME_META_KEY = 'uploadedResumeMeta';
+
+function readProfile(): Profile {
+  try {
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Profile) : {};
+  } catch {
+    return {};
+  }
+}
+
+function readAppliedCount(): number {
+  try {
+    const raw = localStorage.getItem(APPLIED_STORAGE_KEY);
+    if (!raw) return 0;
+    const map = JSON.parse(raw) as Record<string, boolean>;
+    return Object.values(map).filter(Boolean).length;
+  } catch {
+    return 0;
+  }
+}
 
 const StudentDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'jobs' | 'applications' | 'resumes' | 'placements'>('jobs');
+  const [activeTab, setActiveTab] = useState<'jobs' | 'applications' | 'placements'>('jobs');
   const [jobs] = useState<Job[]>(mockJobs);
-  const [student] = useState(mockStudent);
+
+  // ---- Load profile from localStorage to drive name/eligibility ----
+  const [profile, setProfile] = useState<Profile>(() => readProfile());
+
+  // ---- Dynamic Applications count from Placement Notices checkboxes ----
+  const [appliedCount, setAppliedCount] = useState<number>(() => readAppliedCount());
+
+  // hidden file input ref for Upload Resume
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const refreshProfile = () => setProfile(readProfile());
+    const refreshApplied = () => setAppliedCount(readAppliedCount());
+
+    const onFocus = () => {
+      refreshProfile();
+      refreshApplied();
+    };
+    window.addEventListener('focus', onFocus);
+
+    // Update if another tab modifies localStorage
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === APPLIED_STORAGE_KEY) refreshApplied();
+      if (e.key === PROFILE_STORAGE_KEY) refreshProfile();
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  // Start with mock student, then override with profile values where available
+  const student = {
+    ...mockStudent,
+    name: profile.name?.trim() || mockStudent.name,
+    branch: profile.branch?.trim() || mockStudent.branch,
+    cgpa:
+      (() => {
+        const n = Number(profile.cgpa);
+        return Number.isFinite(n) ? n : mockStudent.cgpa;
+      })(),
+  };
+
+  // Choose an email for uploading (prefer institutional, then personal, then mock)
+  const userEmail = (profile.thaparEmail?.trim() ||
+    profile.personalEmail?.trim() ||
+    mockStudent.email) as string;
 
   // ---- Placements state (use the type from PlacementCard) ----
   const [placements, setPlacements] = useState<PlacementCardType[]>([]);
@@ -26,7 +111,7 @@ const StudentDashboard: React.FC = () => {
         setLoadingPlacements(true);
         setPlacementsError(null);
 
-        // Last 30 days (was 7)
+        // Last 30 days
         const res = await fetch('/api/placements?days=30', { signal: ctrl.signal });
         const json = await res.json();
         if (!json?.ok) throw new Error(json?.error || 'Failed to load placements');
@@ -48,9 +133,8 @@ const StudentDashboard: React.FC = () => {
           snippet: x.snippet || '',
         }));
 
-        // Sort newest first (defensive)
+        // Sort newest first
         mapped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
         setPlacements(mapped);
       } catch (e: any) {
         if (e?.name !== 'AbortError') {
@@ -81,22 +165,122 @@ const StudentDashboard: React.FC = () => {
     student.backlogs <= job.eligibility.maxBacklogs
   );
 
-  const appliedJobs = student.applications.length;
+  // Still using mock student's application states for these two
   const shortlistedApplications = student.applications.filter(app => app.status === 'shortlisted').length;
   const selectedApplications = student.applications.filter(app => app.status === 'selected').length;
+
+  // ---- Upload Resume (front-end -> backend) ----
+  const onClickUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onFileChosen: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    setUploadMsg(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setUploadMsg('Please upload a PDF file.');
+      e.target.value = '';
+      return;
+    }
+
+    const form = new FormData();
+    form.append('resume', file); // field name must be "resume" for the server
+    form.append('userName', student.name);   // from profile (fallback to mock)
+    form.append('userEmail', userEmail);     // from profile or mock
+
+    setUploading(true);
+    try {
+      const res = await fetch('/api/resumes/upload', {
+        method: 'POST',
+        body: form,
+        // no need to set headers; browser sets multipart boundary
+        // credentials not needed unless you use cookies
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || 'Upload failed');
+      }
+
+      // Save a small client-side marker for quick feedback
+      const meta = {
+        dbId: json.data?.id,
+        name: file.name,
+        size: file.size,
+        uploadedAt: json.data?.uploadedAt || new Date().toISOString(),
+        path: json.data?.path, // e.g. uploads/resumes/<file>
+      };
+      try {
+        localStorage.setItem(RESUME_META_KEY, JSON.stringify(meta));
+      } catch {}
+
+      setUploadMsg('✅ Resume uploaded successfully.');
+    } catch (err: any) {
+      console.error(err);
+      setUploadMsg(`❌ ${err?.message || 'Upload failed'}`);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100">
       <div className="max-w-7xl mx-auto p-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, {student.name}!</h1>
-          <p className="text-gray-600">Track your placement journey and explore new opportunities</p>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Welcome back, {student.name}!
+            </h1>
+            <p className="text-gray-600">Track your placement journey and explore new opportunities</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClickUpload}
+              disabled={uploading}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              aria-label="Upload your resume (PDF)"
+            >
+              <Upload className="w-4 h-4" />
+              {uploading ? 'Uploading…' : 'Upload Resume (PDF)'}
+            </button>
+
+            {/* hidden input for file selection */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={onFileChosen}
+            />
+
+            <Link
+              to="/profile"
+              className="inline-flex items-center rounded-lg border px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              aria-label="Edit your student profile"
+            >
+              Edit Profile
+            </Link>
+          </div>
         </div>
 
-        {/* Stats Cards */}
+        {uploadMsg && (
+          <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            {uploadMsg}
+          </div>
+        )}
+
+        {/* Stats Cards (now clickable) */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <button
+            onClick={() => setActiveTab('jobs')}
+            className="text-left bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow transition"
+            aria-label="View eligible jobs"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Eligible Jobs</p>
@@ -104,19 +288,27 @@ const StudentDashboard: React.FC = () => {
               </div>
               <Target className="w-8 h-8 text-blue-600" />
             </div>
-          </div>
+          </button>
           
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <button
+            onClick={() => setActiveTab('applications')}
+            className="text-left bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow transition"
+            aria-label="View applications"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Applications</p>
-                <p className="text-2xl font-bold text-amber-600">{appliedJobs}</p>
+                <p className="text-2xl font-bold text-amber-600">{appliedCount}</p>
               </div>
               <Users className="w-8 h-8 text-amber-600" />
             </div>
-          </div>
+          </button>
           
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <button
+            onClick={() => setActiveTab('applications')}
+            className="text-left bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow transition"
+            aria-label="View shortlisted applications"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Shortlisted</p>
@@ -124,9 +316,13 @@ const StudentDashboard: React.FC = () => {
               </div>
               <TrendingUp className="w-8 h-8 text-green-600" />
             </div>
-          </div>
+          </button>
           
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <button
+            onClick={() => setActiveTab('applications')}
+            className="text-left bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow transition"
+            aria-label="View selected applications"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Selected</p>
@@ -134,16 +330,15 @@ const StudentDashboard: React.FC = () => {
               </div>
               <Calendar className="w-8 h-8 text-emerald-600" />
             </div>
-          </div>
+          </button>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation (no Resume Manager tab) */}
         <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 mb-8">
           <div className="flex border-b border-gray-200 overflow-x-auto">
             {[
               { id: 'jobs', label: 'Available Jobs', count: eligibleJobs.length },
-              { id: 'applications', label: 'My Applications', count: appliedJobs },
-              { id: 'resumes', label: 'Resume Manager', count: student.resumes.length },
+              { id: 'applications', label: 'My Applications', count: appliedCount },
               { id: 'placements', label: 'Placement Notices', count: placements.length },
             ].map((tab) => (
               <button
@@ -185,11 +380,6 @@ const StudentDashboard: React.FC = () => {
             {/* Applications */}
             {activeTab === 'applications' && (
               <ApplicationStatus applications={student.applications} jobs={jobs} />
-            )}
-
-            {/* Resumes */}
-            {activeTab === 'resumes' && (
-              <ResumeManager student={student} />
             )}
 
             {/* Placement Notices */}

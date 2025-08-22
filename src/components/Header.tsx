@@ -1,24 +1,27 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { Link } from "react-router-dom";
 import { LogOut, User, Bell, Settings, GraduationCap } from 'lucide-react';
 
 const Header: React.FC = () => {
   const { user, userRole, logout } = useAuth();
 
   return (
-    <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
+ <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+          {/* Logo + Title → now clickable */}
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">PlacementPro</h1>
               <p className="text-sm text-gray-600 capitalize">{userRole} Portal</p>
             </div>
-          </div>
+          </Link>
 
+          {/* Right Section */}
           <div className="flex items-center gap-4">
             <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
               <Bell className="w-5 h-5" />
@@ -26,7 +29,7 @@ const Header: React.FC = () => {
             <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
               <Settings className="w-5 h-5" />
             </button>
-            
+
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                 <User className="w-4 h-4 text-blue-600" />
