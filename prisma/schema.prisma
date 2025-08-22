@@ -8,6 +8,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/* ------------ MODELS ------------ */
+
 model Resume {
   id           String   @id @default(cuid())
   userName     String
@@ -22,80 +24,101 @@ model Resume {
   educations   Education[]
   internships  Internship[]
   projects     Project[]
-  positions    Position[]
   achievements Achievement[]
+  positions    Position[]
   extras       ExtraActivity[]
   skills       Skill[]
 }
 
 model Education {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   resumeId  String
   institute String
   degree    String
   start     String?
   end       String?
   grade     String?
-
-  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  resume    Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
 }
 
 model Internship {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   resumeId  String
   company   String
   title     String?
   location  String?
   start     String?
   end       String?
-  bullets   Json      @default("[]") // <— changed from String[]
+  resume    Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  bullets   InternshipBullet[]
+}
 
-  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+model InternshipBullet {
+  id           String     @id @default(cuid())
+  internshipId String
+  text         String
+  internship   Internship @relation(fields: [internshipId], references: [id], onDelete: Cascade)
 }
 
 model Project {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   resumeId  String
   name      String
   summary   String?
-  bullets   Json      @default("[]") // <— changed from String[]
-
-  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  resume    Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  bullets   ProjectBullet[]
 }
 
-model Position {
-  id        String   @id @default(cuid())
-  resumeId  String
-  role      String
-  org       String?
-  bullets   Json      @default("[]") // <— changed from String[]
-
-  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+model ProjectBullet {
+  id        String  @id @default(cuid())
+  projectId String
+  text      String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Achievement {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   resumeId  String
   title     String
   detail    String?
+  resume    Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
 
-  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+model Position {
+  id        String  @id @default(cuid())
+  resumeId  String
+  org       String?
+  title     String?
+  resume    Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  bullets   PositionBullet[]
+}
+
+model PositionBullet {
+  id         String   @id @default(cuid())
+  positionId String
+  text       String
+  position   Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
 }
 
 model ExtraActivity {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   resumeId  String
   title     String
   detail    String?
-
-  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  resume    Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
 }
 
 model Skill {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   resumeId  String
   category  String
-  items     Json      @default("[]") // <— changed from String[]
+  resume    Resume  @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  items     SkillItem[]
+}
 
-  Resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+model SkillItem {
+  id       String @id @default(cuid())
+  skillId  String
+  text     String
+  skill    Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
 }
