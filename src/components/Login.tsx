@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Lock, GraduationCap, Shield } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';  // for navigation
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ const Login: React.FC = () => {
   const [role, setRole] = useState<'student' | 'admin'>('student');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +31,7 @@ const Login: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-lg mb-4">
               <GraduationCap className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Placement Portal</h1>
+            <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Welcome | Placify</h1>
             <p className="text-gray-600">Sign in to continue</p>
           </div>
 
@@ -95,6 +97,7 @@ const Login: React.FC = () => {
               </div>
             </div>
 
+            {/* Sign In Button */}
             <button
               type="submit"
               disabled={loading}
@@ -112,15 +115,16 @@ const Login: React.FC = () => {
               </span>
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700"></div>
             </button>
-          </form>
 
-          <div className="mt-8 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl shadow-inner relative z-10">
-            <h3 className="text-sm font-bold text-blue-900 mb-2">Demo Credentials</h3>
-            <div className="text-xs text-blue-800 space-y-1">
-              <p><strong>Student:</strong> student@example.com / password</p>
-              <p><strong>Admin:</strong> admin@example.com / password</p>
-            </div>
-          </div>
+            {/* Create Account Button */}
+            <button
+              type="button"
+              onClick={() => navigate('/signup')}
+              className="w-full mt-3 relative bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 py-3 rounded-xl font-semibold shadow-md hover:shadow-lg transition-all"
+            >
+              Create an Account
+            </button>
+          </form>
         </div>
       </div>
     </div>
